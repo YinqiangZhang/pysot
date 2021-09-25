@@ -4,6 +4,9 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import os
+import sys
+# set the root path to help the project run in the vscode IDE
+sys.path.append(os.getcwd())
 import argparse
 
 import cv2
@@ -18,9 +21,9 @@ from pysot.tracker.tracker_builder import build_tracker
 torch.set_num_threads(1)
 
 parser = argparse.ArgumentParser(description='tracking demo')
-parser.add_argument('--config', type=str, help='config file')
-parser.add_argument('--snapshot', type=str, help='model name')
-parser.add_argument('--video_name', default='', type=str,
+parser.add_argument('--config', type=str, help='config file', default="D:\\DL2Research\\pysot\\experiments\\siamrpn_alex_dwxcorr\\config.yaml")
+parser.add_argument('--snapshot', type=str, help='model name', default="D:\\DL2Research\\pysot\\experiments\\siamrpn_alex_dwxcorr\\model.pth")
+parser.add_argument('--video_name', default="D:\\DL2Research\\pysot\\demo\\bag.avi", type=str,
                     help='videos or image files')
 args = parser.parse_args()
 
