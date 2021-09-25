@@ -28,6 +28,7 @@ parser.add_argument('--video_name', default="D:\\DL2Research\\pysot\\demo\\bag.a
 args = parser.parse_args()
 
 
+# read image from the laptop camera or video sources
 def get_frames(video_name):
     if not video_name:
         cap = cv2.VideoCapture(0)
@@ -87,10 +88,12 @@ def main():
                 init_rect = cv2.selectROI(video_name, frame, False, False)
             except:
                 exit()
-            tracker.init(frame, init_rect)
+            tracker.init(frame, init_rect) # init the tracker with initial rect region
             first_frame = False
         else:
-            outputs = tracker.track(frame)
+            outputs = tracker.track(frame) # do the tracking process
+
+            # draw the tracking results
             if 'polygon' in outputs:
                 polygon = np.array(outputs['polygon']).astype(np.int32)
                 cv2.polylines(frame, [polygon.reshape((-1, 1, 2))],
@@ -104,6 +107,8 @@ def main():
                 cv2.rectangle(frame, (bbox[0], bbox[1]),
                               (bbox[0]+bbox[2], bbox[1]+bbox[3]),
                               (0, 255, 0), 3)
+
+            # results visualization
             cv2.imshow(video_name, frame)
             cv2.waitKey(40)
 
