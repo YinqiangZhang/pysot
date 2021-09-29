@@ -44,13 +44,14 @@ parser.add_argument('--local_rank', type=int, default=0,
 args = parser.parse_args()
 
 
+# set seed for random number generation
 def seed_torch(seed=0):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = False # what's the meaning of this 
     torch.backends.cudnn.deterministic = True
 
 
@@ -71,6 +72,7 @@ def build_data_loader():
     return train_loader
 
 
+# set the learning rate according to the dataset
 def build_opt_lr(model, current_epoch=0):
     for param in model.backbone.parameters():
         param.requires_grad = False
@@ -114,6 +116,7 @@ def build_opt_lr(model, current_epoch=0):
     return optimizer, lr_scheduler
 
 
+# save the information of grad into the tensorboard
 def log_grads(model, tb_writer, tb_index):
     def weights_grads(model):
         grad = {}
@@ -153,7 +156,7 @@ def log_grads(model, tb_writer, tb_index):
 
 def train(train_loader, model, optimizer, lr_scheduler, tb_writer):
     cur_lr = lr_scheduler.get_cur_lr()
-    rank = get_rank()
+    rank = get_rank() # used for multi processing
 
     average_meter = AverageMeter()
 
@@ -172,6 +175,8 @@ def train(train_loader, model, optimizer, lr_scheduler, tb_writer):
 
     logger.info("model\n{}".format(describe(model.module)))
     end = time.time()
+
+    # training process (extract data from the data loader)
     for idx, data in enumerate(train_loader):
         if epoch != idx // num_per_epoch + start_epoch:
             epoch = idx // num_per_epoch + start_epoch
@@ -186,15 +191,18 @@ def train(train_loader, model, optimizer, lr_scheduler, tb_writer):
             if epoch == cfg.TRAIN.EPOCH:
                 return
 
+            # first train the proposal network, then train the backbone 
             if cfg.BACKBONE.TRAIN_EPOCH == epoch:
                 logger.info('start training backbone.')
                 optimizer, lr_scheduler = build_opt_lr(model.module, epoch)
                 logger.info("model\n{}".format(describe(model.module)))
 
+            # update current learning rate
             lr_scheduler.step(epoch)
             cur_lr = lr_scheduler.get_cur_lr()
             logger.info('epoch: {}'.format(epoch+1))
 
+        # record the learning rate
         tb_idx = idx
         if idx % num_per_epoch == 0 and idx != 0:
             for idx, pg in enumerate(optimizer.param_groups):
@@ -207,18 +215,21 @@ def train(train_loader, model, optimizer, lr_scheduler, tb_writer):
         if rank == 0:
             tb_writer.add_scalar('time/data', data_time, tb_idx)
 
+        # forward pass to get the loss
         outputs = model(data)
         loss = outputs['total_loss']
-
+        
+        # back propagation
         if is_valid_number(loss.data.item()):
-            optimizer.zero_grad()
+            optimizer.zero_grad() # clear previous grad
             loss.backward()
-            reduce_gradients(model)
+            reduce_gradients(model) # why here we use a reduced gradients 
 
+            # record gradients 
             if rank == 0 and cfg.TRAIN.LOG_GRADS:
                 log_grads(model.module, tb_writer, tb_idx)
 
-            # clip gradient
+            # clip gradient (here we have a clip operation)
             clip_grad_norm_(model.parameters(), cfg.TRAIN.GRAD_CLIP)
             optimizer.step()
 
