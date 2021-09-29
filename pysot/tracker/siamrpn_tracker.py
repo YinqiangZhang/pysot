@@ -6,41 +6,49 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import numpy as np
-import torch.nn.functional as F
+import torch.nn.functional as F # useful functions in torch
 
-from pysot.core.config import cfg
-from pysot.utils.anchor import Anchors
-from pysot.tracker.base_tracker import SiameseTracker
+from pysot.core.config import cfg # configuration files
+from pysot.utils.anchor import Anchors # how to set anchors here
+from pysot.tracker.base_tracker import SiameseTracker # base class for tracker
 
 
 class SiamRPNTracker(SiameseTracker):
     def __init__(self, model):
         super(SiamRPNTracker, self).__init__()
+        # size of response map
+        # how can we set the stride for the bounding box learning
         self.score_size = (cfg.TRACK.INSTANCE_SIZE - cfg.TRACK.EXEMPLAR_SIZE) // \
             cfg.ANCHOR.STRIDE + 1 + cfg.TRACK.BASE_SIZE
         self.anchor_num = len(cfg.ANCHOR.RATIOS) * len(cfg.ANCHOR.SCALES)
         hanning = np.hanning(self.score_size)
         window = np.outer(hanning, hanning)
+        # tile the cos window five times 
         self.window = np.tile(window.flatten(), self.anchor_num)
         self.anchors = self.generate_anchor(self.score_size)
         self.model = model
         self.model.eval()
 
     def generate_anchor(self, score_size):
+        # generate and set the size of different anchors 
         anchors = Anchors(cfg.ANCHOR.STRIDE,
                           cfg.ANCHOR.RATIOS,
                           cfg.ANCHOR.SCALES)
         anchor = anchors.anchors
+        # width and height
         x1, y1, x2, y2 = anchor[:, 0], anchor[:, 1], anchor[:, 2], anchor[:, 3]
+        # the 1st and 2nd dimension is rest for the center position
         anchor = np.stack([(x1+x2)*0.5, (y1+y2)*0.5, x2-x1, y2-y1], 1)
         total_stride = anchors.stride
         anchor_num = anchor.shape[0]
-        anchor = np.tile(anchor, score_size * score_size).reshape((-1, 4))
+        anchor = np.tile(anchor, score_size * score_size).reshape((-1, 4)) # repeat anchor and reshape
         ori = - (score_size // 2) * total_stride
         xx, yy = np.meshgrid([ori + total_stride * dx for dx in range(score_size)],
                              [ori + total_stride * dy for dy in range(score_size)])
         xx, yy = np.tile(xx.flatten(), (anchor_num, 1)).flatten(), \
             np.tile(yy.flatten(), (anchor_num, 1)).flatten()
+        
+        # center position
         anchor[:, 0], anchor[:, 1] = xx.astype(np.float32), yy.astype(np.float32)
         return anchor
 
@@ -72,16 +80,18 @@ class SiamRPNTracker(SiameseTracker):
             img(np.ndarray): BGR image
             bbox: (x, y, w, h) bbox
         """
+        # get the cneter position and size from bounding box
         self.center_pos = np.array([bbox[0]+(bbox[2]-1)/2,
                                     bbox[1]+(bbox[3]-1)/2])
         self.size = np.array([bbox[2], bbox[3]])
 
         # calculate z crop size
+        # increase the size of figure as the search region
         w_z = self.size[0] + cfg.TRACK.CONTEXT_AMOUNT * np.sum(self.size)
         h_z = self.size[1] + cfg.TRACK.CONTEXT_AMOUNT * np.sum(self.size)
         s_z = round(np.sqrt(w_z * h_z))
 
-        # calculate channle average
+        # calculate channle average (per channel averaged pixel value)
         self.channel_average = np.mean(img, axis=(0, 1))
 
         # get crop
@@ -108,6 +118,9 @@ class SiamRPNTracker(SiameseTracker):
 
         outputs = self.model.track(x_crop)
 
+        # TODO: analyse the response map
+
+        # how to make an assocaition between anchor type and bounding box
         score = self._convert_score(outputs['cls'])
         pred_bbox = self._convert_bbox(outputs['loc'], self.anchors)
 
@@ -134,7 +147,8 @@ class SiamRPNTracker(SiameseTracker):
         best_idx = np.argmax(pscore)
 
         bbox = pred_bbox[:, best_idx] / scale_z
-        lr = penalty[best_idx] * score[best_idx] * cfg.TRACK.LR
+        # the confidence score is according to the learning rate
+        lr = penalty[best_idx] * score[best_idx] * cfg.TRACK.LR 
 
         cx = bbox[0] + self.center_pos[0]
         cy = bbox[1] + self.center_pos[1]

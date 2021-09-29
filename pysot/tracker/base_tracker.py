@@ -35,6 +35,8 @@ class BaseTracker(object):
 
 
 class SiameseTracker(BaseTracker):
+
+    # only add one function compared with the BaseTracker
     def get_subwindow(self, im, pos, model_sz, original_sz, avg_chans):
         """
         args:
@@ -44,17 +46,20 @@ class SiameseTracker(BaseTracker):
             s_z: original size
             avg_chans: channel average
         """
+        # duplicate the size value when only one number is given
         if isinstance(pos, float):
             pos = [pos, pos]
         sz = original_sz
         im_sz = im.shape
-        c = (original_sz + 1) / 2
+        c = (original_sz + 1) / 2 # get a middle size
         # context_xmin = round(pos[0] - c) # py2 and py3 round
+        # define the boundary of bound box
         context_xmin = np.floor(pos[0] - c + 0.5)
         context_xmax = context_xmin + sz - 1
         # context_ymin = round(pos[1] - c)
         context_ymin = np.floor(pos[1] - c + 0.5)
         context_ymax = context_ymin + sz - 1
+        # regulate to make the figure not outside of the picture
         left_pad = int(max(0., -context_xmin))
         top_pad = int(max(0., -context_ymin))
         right_pad = int(max(0., context_xmax - im_sz[1] + 1))
@@ -65,8 +70,9 @@ class SiameseTracker(BaseTracker):
         context_ymin = context_ymin + top_pad
         context_ymax = context_ymax + top_pad
 
-        r, c, k = im.shape
+        r, c, k = im.shape # row, column, channel
         if any([top_pad, bottom_pad, left_pad, right_pad]):
+            # resize the figure when near the figure boundary
             size = (r + top_pad + bottom_pad, c + left_pad + right_pad, k)
             te_im = np.zeros(size, np.uint8)
             te_im[top_pad:top_pad + r, left_pad:left_pad + c, :] = im
@@ -81,15 +87,24 @@ class SiameseTracker(BaseTracker):
             im_patch = te_im[int(context_ymin):int(context_ymax + 1),
                              int(context_xmin):int(context_xmax + 1), :]
         else:
+            # extract the patch
             im_patch = im[int(context_ymin):int(context_ymax + 1),
                           int(context_xmin):int(context_xmax + 1), :]
 
         if not np.array_equal(model_sz, original_sz):
+            # resize the figure to the size needed by model
             im_patch = cv2.resize(im_patch, (model_sz, model_sz))
+        
+        # transpose the image: 1.chennel, 2.row, 3.column
         im_patch = im_patch.transpose(2, 0, 1)
+        # add another dimension for batch
         im_patch = im_patch[np.newaxis, :, :, :]
-        im_patch = im_patch.astype(np.float32)
-        im_patch = torch.from_numpy(im_patch)
+        im_patch = im_patch.astype(np.float32) # transfer the data type to the float32
+        im_patch = torch.from_numpy(im_patch) # transfer the data to the mode of torch tensor
+
+        # convert if this patch is used by cuda
         if cfg.CUDA:
             im_patch = im_patch.cuda()
+
+        # the returned value is the torch tensor value in CPU or GPU
         return im_patch

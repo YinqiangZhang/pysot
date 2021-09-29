@@ -29,7 +29,7 @@ if platform.system() == 'Linux':
 else:
     parser.add_argument('--config', type=str, help='config file', default="D:\\DL2Research\\pysot\\experiments\\siamrpn_alex_dwxcorr\\config.yaml")
     parser.add_argument('--snapshot', type=str, help='model name', default="D:\\DL2Research\\pysot\\experiments\\siamrpn_alex_dwxcorr\\model.pth")
-    parser.add_argument('--video_name', default="D:\\DL2Research\\pysot\\demo\\bag.avi", type=str,
+    parser.add_argument('--video_name', default="D:\\DL2Research\\pysot\\demo\\video_slomo.avi", type=str,
                         help='videos or image files')
 args = parser.parse_args()
 
@@ -87,10 +87,12 @@ def main():
         video_name = args.video_name.split('/')[-1].split('.')[0]
     else:
         video_name = 'webcam'
+    # used function to show the video during running the codes
     cv2.namedWindow(video_name, cv2.WND_PROP_FULLSCREEN)
     for frame in get_frames(args.video_name):
         if first_frame:
             try:
+                # opencv has a function that can help us select ROI methods
                 init_rect = cv2.selectROI(video_name, frame, False, False)
             except:
                 exit()

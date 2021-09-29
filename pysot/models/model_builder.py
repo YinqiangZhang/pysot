@@ -49,7 +49,7 @@ class ModelBuilder(nn.Module):
         self.zf = zf
 
     def track(self, x):
-        xf = self.backbone(x)
+        xf = self.backbone(x) # [template: 6, search 26]
         if cfg.MASK.MASK:
             self.xf = xf[:-1]
             xf = xf[-1]
